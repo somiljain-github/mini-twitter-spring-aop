@@ -123,55 +123,228 @@ public class TweetStatsServiceImpl implements TweetStatsService {
 		public void setUserFollowersButBlocked(HashMap<String, HashSet<String>> userFollowersButBlocked) {
 			this.userFollowersButBlocked = userFollowersButBlocked;
 		}
+		//============================Over riding the functions from TweetStatsService Interface==========================================
+		@Override
+		public void resetStatsAndSystem() {
+			tweetMessage.clear();
+			tweetSentBy.clear();
+			tweetThreadDepth.clear();
+			tweetLikes.clear();
+			tweetLikedBy.clear();
+			tweetSharedWith.clear();
+			tweetIsAReplyTo.clear();
+			
+			userBlockedBy.clear();
+			maxCountOfFollowers.clear();
+			userFollowers.clear();
+			userFollowersButBlocked.clear();
+		}
+	    
+		@Override
+		public int getLengthOfLongestTweet() {
+			/**
+			 * @returns the length of longest message a user successfully sent since the beginning or last reset. 
+			 * Replied messages count as well, but each replying message is an independent message on its own.
+			 * If no messages were successfully tweeted, return 0.
+			 */
+			
+			Integer maxLength = 0;
+			if(tweetMessage.isEmpty())
+			{
+				//No tweets. Returning zero;
+				return maxLength;
+			}
+			
+			for (String messageContent: tweetMessage.values()){
+				maxLength = Math.max(maxLength, messageContent.length());
+			}
+			
+			return maxLength;
+			
+		}
 
-	@Override
-	public void resetStatsAndSystem() {
-		// TODO Auto-generated method stub
 		
-	}
-    
-	@Override
-	public int getLengthOfLongestTweet() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
+		@Override
+		public String getMostFollowedUser() {
+			/**
+			 * @returns the user who is being followed by the biggest number of different users since the beginning or last reset. 
+			 * If there is a tie, return the 1st of such users based on alphabetical order. 
+			 * If any follower has been blocked by the followee, this follower Still count; i.e., 
+			 * Blocking or not does not affect this metric. 
+			 * If someone follows him/herself, it does not count. 
+			 * If no users are followed by anybody, return null.
+			 */
+			Integer maxFollowers = 0;
+			String user = null;
+			
+			for(Map.Entry<String, Integer> entry: maxCountOfFollowers.entrySet()) {
+				String currentUser = entry.getKey();
+				Integer followers = entry.getValue();
+				
+				if(maxFollowers < followers) {
+					maxFollowers = followers;
+					user = currentUser;
+				} else if(maxFollowers == followers && maxFollowers!=0) {
+					if(user.compareTo(currentUser)>0) {
+						user=currentUser;
+						maxFollowers = followers;
+					}
+				}
+			}
+			
+			return user;
+		}
 
-	@Override
-	public String getMostFollowedUser() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+		@Override
+		public UUID getMostPopularMessage() {
+			/**
+			 * @returns the message that has been shared with the biggest number of unique recipients when it is successfully tweeted. 
+			 * If two messages have the same string content but different UUIDs, they are considered different for the purpose here.
+			 * If there is a tie, return the message whose UUID is smaller. If no shared messages, return null. 
+			 * The very original sender of a message will NOT be counted toward the number of shared users for this purpose, unless somebody else 
+			 * has successfully shared the same message (based on string equality) with him.  
+			 */
+			
+			Integer maxNumberOfUsersShared = 0;
+			UUID emptyUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+			UUID messageUUID = emptyUUID;
 
-	@Override
-	public UUID getMostPopularMessage() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	
-	@Override
-	public String getMostProductiveReplier() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+			for(Map.Entry<UUID, HashSet<String>> entry : tweetSharedWith.entrySet()) {
+				UUID currentMessageUUID = entry.getKey();
+				HashSet<String> sharedWith = entry.getValue();
+				Integer numberOfUsersShared = sharedWith.size();
+				
+				if(maxNumberOfUsersShared < numberOfUsersShared) {
+					maxNumberOfUsersShared = numberOfUsersShared;
+					messageUUID = currentMessageUUID;
+				} else if(maxNumberOfUsersShared == numberOfUsersShared) {
+					if(messageUUID.compareTo(currentMessageUUID) > 0 ) {
+						messageUUID = currentMessageUUID;	
+					}
+				}
+			}
+			return (messageUUID.equals(emptyUUID)) ? null : messageUUID;
+		}
+		
+		@Override
+		public String getMostProductiveReplier() {
+			/**
+			 * @returns the most productive user.
+			 * The most productive replier is determined by the total length measured in character count of all the messages successfully tweeted as a reply to another message since the beginning or last reset. 
+			 * If there is a tie, return the 1st of such users based on alphabetical order. 
+			 * If no users successfully tweeted, return null.
+			 */
+			HashMap<String, Integer> tweetLength = new HashMap<String, Integer>();
+			UUID emptyUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+			for(Map.Entry<UUID, String> entry: tweetSentBy.entrySet()) {
+				UUID currentMessage = entry.getKey();
+				String currentUser = entry.getValue();
+				//check if the message is a reply or not
+				UUID parentTweet = tweetIsAReplyTo.getOrDefault(currentMessage, emptyUUID); 	
+				if(!parentTweet.equals(emptyUUID)) {
+					String message = tweetMessage.get(currentMessage);
+					Integer currentLength = message.length();
+					tweetLength.put(currentUser, tweetLength.getOrDefault(currentUser, 0)+currentLength);
+				}
+				
+			}
+			
+			if(tweetLength.isEmpty()) {
+				return null;
+			}
+			String user=null;
+			Integer maxValue = 0;
+			
+			for(Map.Entry<String, Integer> entry: tweetLength.entrySet()) {
+				String currentUser = entry.getKey();
+				Integer currentLength = entry.getValue();
+				if(maxValue < currentLength) {
+					maxValue = currentLength;
+					user=currentUser;
+				} else if(maxValue == currentLength) 
+					if(user.compareTo(currentUser) > 0) {
+						user = currentUser;
+				}
+			}
+			return user;
+		}
 
-	@Override
-	public UUID getMostLikedMessage() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+		@Override
+		public UUID getMostLikedMessage() {
+			/**
+			 * @returns the ID of the message that has been successfully liked by the biggest number of unique recipients when it is successfully tweeted. 
+			 * If two messages are equal based on string equality but have different message IDs, they are considered as different message for this purpose.
+			 * If there is a tie in the number of different recipients, return the smallest message ID. If no shared messages, return null. 
+			 * */
 
-	@Override
-	public String getMostUnpopularFollower() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+			UUID emptyUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+			UUID mostLikedMessage = emptyUUID;
+			Integer mostLikes = 0;
+			
+			for(Map.Entry<UUID, HashSet<String>> entry: tweetLikedBy.entrySet()) {
+				UUID currentMessage = entry.getKey();
+				HashSet<String> likes = entry.getValue();
+				Integer numOfLikes = likes.size();
+				if(mostLikes < numOfLikes) {
+					mostLikes = numOfLikes;
+					mostLikedMessage = currentMessage;
+				} else if(mostLikes == numOfLikes) {
+					if(mostLikedMessage.compareTo(currentMessage) > 0) {
+						mostLikedMessage = currentMessage;
+					}
+				}
+			}
+			
+			return (mostLikedMessage.equals(emptyUUID)) ? null : mostLikedMessage;
+		}
 
-	@Override
-	public UUID getLongestMessageThread() {
-		// TODO Auto-generated method stub
-		return null;
-	}
+		@Override
+		public String getMostUnpopularFollower() {
+			/**
+			 * @return the user who is currently successfully blocked by the biggest number of different users since the beginning or last reset. 
+			 * If there is a tie, return the 1st of such users based on alphabetical order. 
+			 * If no follower has been successfully blocked by anyone, return null.
+			 */
+			String user = null;
+			Integer maxBlockedCount = 0;
+			
+			for(Map.Entry<String, HashSet<String>> entry : userBlockedBy.entrySet()) {
+				String currentUser = entry.getKey();
+				HashSet<String> blockedByUsers = entry.getValue();
+				Integer count = blockedByUsers.size();
+				if(maxBlockedCount < count) {
+					maxBlockedCount = count;
+					user = currentUser;
+				} else if(maxBlockedCount == count) {
+					if(user.compareTo(currentUser) > 0) {
+						user = currentUser;
+					}
+				}
+			}
+			return user;
+		}
 
+		@Override
+		public UUID getLongestMessageThread() {
+			UUID emptyUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+			UUID message = emptyUUID;
+			Integer threadLength = 0;
+			for(Map.Entry<UUID, Integer> entry : tweetThreadDepth.entrySet()) {
+				UUID currentMessage = entry.getKey();
+				Integer currentMessageLength = entry.getValue();
+				
+				if(threadLength < currentMessageLength) {
+					threadLength = currentMessageLength;
+					message = currentMessage;
+				} else if(threadLength == currentMessageLength) {
+					if(message.compareTo(currentMessage) > 0) {
+						message = currentMessage;
+					}
+				}
+			}
+
+			return (message.equals(emptyUUID)) ? null : message;
+		}
 }
 
 
